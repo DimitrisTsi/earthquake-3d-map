@@ -1,78 +1,155 @@
 <!doctype html>
-<html>
+<html lang="en">
 <head>
   <meta charset="utf-8" />
   <title>3D Earthquake Intensity Map</title>
 
-  <!-- MapLibre (free Mapbox alternative) -->
+  <!-- MapLibre GL (free, no API key) -->
   <script src="https://unpkg.com/maplibre-gl@3.6.1/dist/maplibre-gl.js"></script>
-  <link href="https://unpkg.com/maplibre-gl@3.6.1/dist/maplibre-gl.css" rel="stylesheet" />
+  <link
+    href="https://unpkg.com/maplibre-gl@3.6.1/dist/maplibre-gl.css"
+    rel="stylesheet"
+  />
 
   <!-- deck.gl -->
   <script src="https://unpkg.com/deck.gl@8.9.34/dist.min.js"></script>
 
   <style>
-    body { margin: 0; overflow: hidden; }
-    #map { width: 100vw; height: 100vh; }
-    #deck-canvas {
+    body {
+      margin: 0;
+      padding: 0;
+      overflow: hidden;
+      background: #000;
+      font-family: sans-serif;
+    }
+
+    #map {
+      width: 100vw;
+      height: 100vh;
+    }
+
+    #controls {
       position: absolute;
-      pointer-events: none;
+      top: 20px;
+      left: 20px;
+      background: rgba(20, 20, 20, 0.9);
+      color: #fff;
+      padding: 12px;
+      border-radius: 4px;
       z-index: 10;
+      font-size: 13px;
+    }
+
+    #controls input {
+      width: 160px;
     }
   </style>
 </head>
 
 <body>
-  <div id="map"></div>
 
-  <script>
-    const map = new maplibregl.Map({
-      container: 'map',
-      style: 'https://basemaps.cartocdn.com/gl/dark-matter-gl-style/style.json',
-      center: [0, 20],
-      zoom: 4,
-      pitch: 60,
-      bearing: -20
+<div id="map"></div>
+
+<div id="controls">
+  <div><strong>Min magnitude</strong></div>
+  <input
+    id="magSlider"
+    type="range"
+    min="0"
+    max="8"
+    step="0.1"
+    value="0"
+  />
+  <div>Value: <span id="magValue">0</span></div>
+</div>
+
+<script>
+  // ----------------------------------------------------------------------------
+  // 1. Create the MapLibre map
+  // ----------------------------------------------------------------------------
+  const map = new maplibregl.Map({
+    container: 'map',
+    style: 'https://basemaps.cartocdn.com/gl/dark-matter-gl-style/style.json',
+    center: [0, 20],
+    zoom: 1.8,
+    pitch: 60,
+    bearing: -20,
+    antialias: true
+  });
+
+  map.addControl(new maplibregl.NavigationControl());
+
+  // ----------------------------------------------------------------------------
+  // 2. Globals
+  // ----------------------------------------------------------------------------
+  let earthquakes = [];
+  let overlay = null;
+
+  // ----------------------------------------------------------------------------
+  // 3. Fetch USGS earthquake data
+  // ----------------------------------------------------------------------------
+  fetch('https://earthquake.usgs.gov/earthquakes/feed/v1.0/summary/all_month.geojson')
+    .then(response => response.json())
+    .then(data => {
+      earthquakes = data.features;
+      updateLayer(0);
+    })
+    .catch(err => {
+      console.error('Failed to load earthquake data', err);
     });
 
-    map.addControl(new maplibregl.NavigationControl());
+  // ----------------------------------------------------------------------------
+  // 4. Build / update the deck.gl layer
+  // ----------------------------------------------------------------------------
+  function updateLayer(minMag) {
+    const filtered = earthquakes.filter(
+      d => (d.properties.mag || 0) >= minMag
+    );
 
-    const deckgl = new deck.Deck({
-      canvas: 'deck-canvas',
-      initialViewState: {
-        longitude: 0,
-        latitude: 20,
-        zoom: 1.8,
-        pitch: 60,
-        bearing: -20
+    const layer = new deck.ColumnLayer({
+      id: 'earthquakes',
+      data: filtered,
+
+      diskResolution: 12,
+      radius: 20000,
+      extruded: true,
+      elevationScale: 20000,
+
+      getPosition: d => d.geometry.coordinates,
+      getElevation: d => d.properties.mag || 0,
+
+      getFillColor: d => {
+        const m = d.properties.mag || 0;
+        if (m >= 6) return [220, 60, 60];
+        if (m >= 4) return [240, 160, 60];
+        return [240, 220, 140];
       },
-      controller: true,
-      layers: []
+
+      pickable: true
     });
 
-    fetch('https://earthquake.usgs.gov/earthquakes/feed/v1.0/summary/all_month.geojson')
-      .then(r => r.json())
-      .then(data => {
-        const layer = new deck.ColumnLayer({
-          id: 'earthquakes',
-          data: data.features,
-          diskResolution: 12,
-          radius: 20000,
-          extruded: true,
-          elevationScale: 50000,
-          getPosition: d => d.geometry.coordinates,
-          getElevation: d => Math.max(d.properties.mag, 0),
-          getFillColor: d => {
-            const m = d.properties.mag || 0;
-            return m > 6 ? [255, 60, 60] :
-                   m > 4 ? [255, 160, 60] :
-                           [255, 220, 140];
-          },
-          pickable: true
-        });
-
-        deckgl.setProps({ layers: [layer] });
+    if (!overlay) {
+      overlay = new deck.MapboxOverlay({
+        layers: [layer]
       });
-  </script>
+      map.addControl(overlay);
+    } else {
+      overlay.setProps({ layers: [layer] });
+    }
+  }
+
+  // ----------------------------------------------------------------------------
+  // 5. Slider wiring
+  // ----------------------------------------------------------------------------
+  const slider = document.getElementById('magSlider');
+  const label = document.getElementById('magValue');
+
+  slider.addEventListener('input', () => {
+    const val = parseFloat(slider.value);
+    label.textContent = val.toFixed(1);
+    updateLayer(val);
+  });
+</script>
+
 </body>
 </html>
