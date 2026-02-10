@@ -4,12 +4,9 @@
   <meta charset="utf-8" />
   <title>3D Earthquake Intensity Map</title>
 
-  <!-- MapLibre GL (free, no API key) -->
+  <!-- MapLibre GL -->
   <script src="https://unpkg.com/maplibre-gl@3.6.1/dist/maplibre-gl.js"></script>
-  <link
-    href="https://unpkg.com/maplibre-gl@3.6.1/dist/maplibre-gl.css"
-    rel="stylesheet"
-  />
+  <link href="https://unpkg.com/maplibre-gl@3.6.1/dist/maplibre-gl.css" rel="stylesheet"/>
 
   <!-- deck.gl -->
   <script src="https://unpkg.com/deck.gl@8.9.34/dist.min.js"></script>
@@ -17,7 +14,6 @@
   <style>
     body {
       margin: 0;
-      padding: 0;
       overflow: hidden;
       background: #000;
       font-family: system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
@@ -28,49 +24,42 @@
       height: 100vh;
     }
 
-    #controls {
+    .panel {
       position: absolute;
-      top: 20px;
-      left: 20px;
-      background: rgba(20, 20, 20, 0.9);
-      color: #fff;
+      background: rgba(15,15,15,0.9);
+      color: #ddd;
       padding: 12px;
       border-radius: 4px;
+      font-size: 12px;
       z-index: 10;
-      font-size: 13px;
+    }
+
+    #controls {
+      top: 20px;
+      left: 20px;
+      width: 260px;
     }
 
     #controls input {
-      width: 160px;
+      width: 100%;
     }
 
     #metadata {
-      position: absolute;
       bottom: 20px;
       left: 20px;
       width: 320px;
-      background: rgba(15, 15, 15, 0.9);
-      color: #ddd;
-      padding: 14px;
-      border-radius: 4px;
-      z-index: 10;
-      font-size: 12px;
       line-height: 1.45;
     }
 
     #metadata h3 {
-      margin: 0 0 8px 0;
-      font-size: 14px;
+      margin: 0 0 6px 0;
       color: #fff;
-    }
-
-    #metadata p {
-      margin: 6px 0;
+      font-size: 14px;
     }
 
     #metadata ul {
       padding-left: 0;
-      margin: 6px 0 0 0;
+      margin: 6px 0;
     }
 
     #metadata li {
@@ -78,10 +67,34 @@
       margin: 2px 0;
     }
 
-    #metadata .note {
-      font-size: 11px;
-      color: #aaa;
+    #infobox {
+      bottom: 20px;
+      right: 20px;
+      width: 280px;
+    }
+
+    #infobox strong {
+      color: #fff;
+    }
+
+    button {
       margin-top: 8px;
+      width: 100%;
+      padding: 6px;
+      background: #222;
+      color: #fff;
+      border: 1px solid #444;
+      cursor: pointer;
+    }
+
+    button:hover {
+      background: #333;
+    }
+
+    .note {
+      color: #aaa;
+      font-size: 11px;
+      margin-top: 6px;
     }
   </style>
 </head>
@@ -91,42 +104,34 @@
 <div id="map"></div>
 
 <!-- Controls -->
-<div id="controls">
-  <div><strong>Minimum magnitude</strong></div>
-  <input
-    id="magSlider"
-    type="range"
-    min="0"
-    max="8"
-    step="0.1"
-    value="0"
-  />
+<div id="controls" class="panel">
+  <strong>Filters</strong><br><br>
+
+  <label>Minimum magnitude</label>
+  <input id="magSlider" type="range" min="0" max="8" step="0.1" value="0">
   <div>Value: <span id="magValue">0.0</span></div>
+
+  <br>
+
+  <label>Time window (days)</label>
+  <input id="timeSlider" type="range" min="1" max="30" step="1" value="30">
+  <div>Last <span id="timeValue">30</span> days</div>
+
+  <button id="exportBtn">Export screenshot</button>
 </div>
 
-<!-- Metadata panel -->
-<div id="metadata">
+<!-- Metadata -->
+<div id="metadata" class="panel">
   <h3>3D Earthquake Intensity Map</h3>
 
   <p>
-    Interactive 3D visualization of global seismic activity.
-    Vertical extrusion and color encode earthquake magnitude.
+    Interactive 3D visualization of global earthquakes.
+    Column height and color encode moment magnitude (Mw).
   </p>
 
-  <p>
-    <strong>Data source:</strong><br>
-    USGS Earthquake Catalog
-  </p>
-
-  <p>
-    <strong>Temporal coverage:</strong><br>
-    Last 30 days (rolling window)
-  </p>
-
-  <p>
-    <strong>Visual encoding:</strong><br>
-    Height & color → Moment magnitude (Mw)
-  </p>
+  <p><strong>Data source:</strong><br>USGS Earthquake Catalog</p>
+  <p><strong>Temporal coverage:</strong><br>Rolling last 30 days</p>
+  <p><strong>Encoding:</strong><br>Height & color → magnitude</p>
 
   <p><strong>Magnitude classes:</strong></p>
   <ul>
@@ -136,14 +141,20 @@
   </ul>
 
   <p class="note">
-    Heights are visually exaggerated for interpretability.
-    This visualization is intended for exploratory analysis only.
+    Heights are visually exaggerated.
+    For exploratory analysis only.
   </p>
+</div>
+
+<!-- Info box -->
+<div id="infobox" class="panel">
+  <strong>Earthquake details</strong>
+  <div id="infoContent" class="note">Click a column</div>
 </div>
 
 <script>
   // ---------------------------------------------------------------------------
-  // 1. Create MapLibre map
+  // Map setup
   // ---------------------------------------------------------------------------
   const map = new maplibregl.Map({
     container: 'map',
@@ -158,38 +169,41 @@
   map.addControl(new maplibregl.NavigationControl());
 
   // ---------------------------------------------------------------------------
-  // 2. Globals
+  // Globals
   // ---------------------------------------------------------------------------
   let earthquakes = [];
   let overlay = null;
 
   // ---------------------------------------------------------------------------
-  // 3. Fetch USGS earthquake data
+  // Fetch data
   // ---------------------------------------------------------------------------
   fetch('https://earthquake.usgs.gov/earthquakes/feed/v1.0/summary/all_month.geojson')
-    .then(response => response.json())
+    .then(r => r.json())
     .then(data => {
       earthquakes = data.features;
-      updateLayer(0);
-    })
-    .catch(err => {
-      console.error('Failed to load earthquake data', err);
+      updateLayer();
     });
 
   // ---------------------------------------------------------------------------
-  // 4. Build / update deck.gl layer
+  // Layer update logic
   // ---------------------------------------------------------------------------
-  function updateLayer(minMag) {
-    const filtered = earthquakes.filter(
-      d => (d.properties.mag || 0) >= minMag
+  function updateLayer() {
+    const minMag = parseFloat(document.getElementById('magSlider').value);
+    const days = parseInt(document.getElementById('timeSlider').value);
+
+    const cutoff = Date.now() - days * 24 * 3600 * 1000;
+
+    const filtered = earthquakes.filter(d =>
+      (d.properties.mag || 0) >= minMag &&
+      d.properties.time >= cutoff
     );
 
     const layer = new deck.ColumnLayer({
       id: 'earthquakes',
       data: filtered,
 
-      diskResolution: 12,
       radius: 20000,
+      diskResolution: 12,
       extruded: true,
       elevationScale: 20000,
 
@@ -203,13 +217,25 @@
         return [240, 220, 140];
       },
 
-      pickable: true
+      pickable: true,
+
+      onClick: ({object}) => {
+        if (!object) return;
+
+        const date = new Date(object.properties.time);
+        const depth = object.geometry.coordinates[2];
+
+        document.getElementById('infoContent').innerHTML = `
+          <p><strong>Magnitude:</strong> ${object.properties.mag}</p>
+          <p><strong>Date:</strong><br>${date.toUTCString()}</p>
+          <p><strong>Depth:</strong> ${depth} km</p>
+          <p><strong>Location:</strong><br>${object.properties.place}</p>
+        `;
+      }
     });
 
     if (!overlay) {
-      overlay = new deck.MapboxOverlay({
-        layers: [layer]
-      });
+      overlay = new deck.MapboxOverlay({ layers: [layer] });
       map.addControl(overlay);
     } else {
       overlay.setProps({ layers: [layer] });
@@ -217,15 +243,41 @@
   }
 
   // ---------------------------------------------------------------------------
-  // 5. Slider interaction
+  // UI wiring
   // ---------------------------------------------------------------------------
-  const slider = document.getElementById('magSlider');
-  const label = document.getElementById('magValue');
+  const magSlider = document.getElementById('magSlider');
+  const magValue = document.getElementById('magValue');
+  const timeSlider = document.getElementById('timeSlider');
+  const timeValue = document.getElementById('timeValue');
 
-  slider.addEventListener('input', () => {
-    const val = parseFloat(slider.value);
-    label.textContent = val.toFixed(1);
-    updateLayer(val);
+  magSlider.addEventListener('input', () => {
+    magValue.textContent = parseFloat(magSlider.value).toFixed(1);
+    updateLayer();
+  });
+
+  timeSlider.addEventListener('input', () => {
+    timeValue.textContent = timeSlider.value;
+    updateLayer();
+  });
+
+  // ---------------------------------------------------------------------------
+  // Screenshot export
+  // ---------------------------------------------------------------------------
+  document.getElementById('exportBtn').addEventListener('click', () => {
+    ['controls','metadata','infobox'].forEach(id =>
+      document.getElementById(id).style.display = 'none'
+    );
+
+    setTimeout(() => {
+      const link = document.createElement('a');
+      link.download = 'earthquake_3d_map.png';
+      link.href = map.getCanvas().toDataURL('image/png');
+      link.click();
+
+      ['controls','metadata','infobox'].forEach(id =>
+        document.getElementById(id).style.display = ''
+      );
+    }, 300);
   });
 </script>
 
