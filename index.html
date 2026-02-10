@@ -159,12 +159,12 @@
 const map = new maplibregl.Map({
   container: 'map',
   style: 'https://basemaps.cartocdn.com/gl/dark-matter-gl-style/style.json',
-  center: [0, 20],
-  zoom: 3.5,
-  pitch: 0,
+  center: [12, 50],     // Central Europe
+  zoom: 3.8,            // Europe-scale
+  pitch: 60,
   bearing: -20,
   antialias: true,
-  preserveDrawingBuffer: true   // ← THIS is the key
+  preserveDrawingBuffer: true
 });
 
   map.addControl(new maplibregl.NavigationControl());
