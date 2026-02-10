@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="utf-8" />
-  <title>3D Earthquake Intensity Map</title>
+  <title>3D Earthquake & Tectonics Explorer</title>
 
   <!-- MapLibre GL -->
   <script src="https://unpkg.com/maplibre-gl@3.6.1/dist/maplibre-gl.js"></script>
@@ -34,48 +34,11 @@
       z-index: 10;
     }
 
-    #controls {
-      top: 20px;
-      left: 20px;
-      width: 260px;
-    }
+    #controls { top: 20px; left: 20px; width: 260px; }
+    #metadata { bottom: 20px; left: 20px; width: 340px; line-height: 1.45; }
+    #infobox { bottom: 20px; right: 20px; width: 280px; }
 
-    #controls input {
-      width: 100%;
-    }
-
-    #metadata {
-      bottom: 20px;
-      left: 20px;
-      width: 320px;
-      line-height: 1.45;
-    }
-
-    #metadata h3 {
-      margin: 0 0 6px 0;
-      color: #fff;
-      font-size: 14px;
-    }
-
-    #metadata ul {
-      padding-left: 0;
-      margin: 6px 0;
-    }
-
-    #metadata li {
-      list-style: none;
-      margin: 2px 0;
-    }
-
-    #infobox {
-      bottom: 20px;
-      right: 20px;
-      width: 280px;
-    }
-
-    #infobox strong {
-      color: #fff;
-    }
+    input { width: 100%; }
 
     button {
       margin-top: 8px;
@@ -87,15 +50,13 @@
       cursor: pointer;
     }
 
-    button:hover {
-      background: #333;
-    }
+    button:hover { background: #333; }
 
-    .note {
-      color: #aaa;
-      font-size: 11px;
-      margin-top: 6px;
-    }
+    h3 { margin: 0 0 6px 0; color: #fff; font-size: 14px; }
+    ul { padding-left: 0; margin: 6px 0; }
+    li { list-style: none; margin: 2px 0; }
+
+    .note { color: #aaa; font-size: 11px; margin-top: 6px; }
   </style>
 </head>
 
@@ -122,27 +83,25 @@
 
 <!-- Metadata -->
 <div id="metadata" class="panel">
-  <h3>3D Earthquake Intensity Map</h3>
+  <h3>3D Earthquake & Tectonics Explorer</h3>
 
   <p>
-    Interactive 3D visualization of global earthquakes.
-    Column height and color encode moment magnitude (Mw).
+    Interactive 3D visualization of global earthquakes overlaid on
+    true terrain and tectonic plate boundaries.
   </p>
 
-  <p><strong>Data source:</strong><br>USGS Earthquake Catalog</p>
-  <p><strong>Temporal coverage:</strong><br>Rolling last 30 days</p>
-  <p><strong>Encoding:</strong><br>Height & color → magnitude</p>
+  <p><strong>Earthquakes:</strong> USGS (last 30 days)</p>
+  <p><strong>Tectonics:</strong> Global plate boundaries (PB2002 / Bird)</p>
+  <p><strong>Terrain:</strong> Global DEM (MapLibre raster-DEM)</p>
 
-  <p><strong>Magnitude classes:</strong></p>
-  <ul>
-    <li><span style="color:#dc3c3c;">■</span> Mw ≥ 6.0</li>
-    <li><span style="color:#f0a03c;">■</span> 4.0 ≤ Mw &lt; 6.0</li>
-    <li><span style="color:#f0dc8c;">■</span> Mw &lt; 4.0</li>
-  </ul>
+  <p><strong>Encoding:</strong><br>
+    Columns → magnitude (Mw)<br>
+    Lines → plate boundaries
+  </p>
 
   <p class="note">
-    Heights are visually exaggerated.
-    For exploratory analysis only.
+    Terrain is shown for geophysical context only.
+    Earthquake heights are visually exaggerated.
   </p>
 </div>
 
@@ -154,20 +113,51 @@
 
 <script>
   // ---------------------------------------------------------------------------
-  // Map setup
+  // Map setup (Europe-focused, true terrain)
   // ---------------------------------------------------------------------------
-const map = new maplibregl.Map({
-  container: 'map',
-  style: 'https://basemaps.cartocdn.com/gl/dark-matter-gl-style/style.json',
-  center: [12, 50],     // Central Europe
-  zoom: 3.8,            // Europe-scale
-  pitch: 60,
-  bearing: -20,
-  antialias: true,
-  preserveDrawingBuffer: true
-});
+  const map = new maplibregl.Map({
+    container: 'map',
+    style: 'https://basemaps.cartocdn.com/gl/dark-matter-gl-style/style.json',
+    center: [12, 50],
+    zoom: 3.8,
+    pitch: 60,
+    bearing: -20,
+    antialias: true,
+    preserveDrawingBuffer: true
+  });
 
   map.addControl(new maplibregl.NavigationControl());
+
+  map.on('load', () => {
+    // --- Terrain (DEM)
+    map.addSource('terrain', {
+      type: 'raster-dem',
+      url: 'https://demotiles.maplibre.org/terrain-tiles/tiles.json',
+      tileSize: 256
+    });
+
+    map.setTerrain({
+      source: 'terrain',
+      exaggeration: 1.5
+    });
+
+    // --- Plate boundaries (GeoJSON, hosted remotely)
+    map.addSource('plates', {
+      type: 'geojson',
+      data: 'https://raw.githubusercontent.com/fraxen/tectonicplates/master/GeoJSON/PB2002_boundaries.json'
+    });
+
+    map.addLayer({
+      id: 'plates-line',
+      type: 'line',
+      source: 'plates',
+      paint: {
+        'line-color': '#00bcd4',
+        'line-width': 1.5,
+        'line-opacity': 0.6
+      }
+    });
+  });
 
   // ---------------------------------------------------------------------------
   // Globals
@@ -176,7 +166,7 @@ const map = new maplibregl.Map({
   let overlay = null;
 
   // ---------------------------------------------------------------------------
-  // Fetch data
+  // Fetch earthquake data
   // ---------------------------------------------------------------------------
   fetch('https://earthquake.usgs.gov/earthquakes/feed/v1.0/summary/all_month.geojson')
     .then(r => r.json())
@@ -186,12 +176,11 @@ const map = new maplibregl.Map({
     });
 
   // ---------------------------------------------------------------------------
-  // Layer update logic
+  // Update deck.gl layer
   // ---------------------------------------------------------------------------
   function updateLayer() {
     const minMag = parseFloat(document.getElementById('magSlider').value);
     const days = parseInt(document.getElementById('timeSlider').value);
-
     const cutoff = Date.now() - days * 24 * 3600 * 1000;
 
     const filtered = earthquakes.filter(d =>
@@ -271,7 +260,7 @@ const map = new maplibregl.Map({
 
     setTimeout(() => {
       const link = document.createElement('a');
-      link.download = 'earthquake_3d_map.png';
+      link.download = 'earthquake_tectonics_3d.png';
       link.href = map.getCanvas().toDataURL('image/png');
       link.click();
 
