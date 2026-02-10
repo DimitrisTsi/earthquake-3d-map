@@ -20,7 +20,7 @@
       padding: 0;
       overflow: hidden;
       background: #000;
-      font-family: sans-serif;
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
     }
 
     #map {
@@ -43,6 +43,46 @@
     #controls input {
       width: 160px;
     }
+
+    #metadata {
+      position: absolute;
+      bottom: 20px;
+      left: 20px;
+      width: 320px;
+      background: rgba(15, 15, 15, 0.9);
+      color: #ddd;
+      padding: 14px;
+      border-radius: 4px;
+      z-index: 10;
+      font-size: 12px;
+      line-height: 1.45;
+    }
+
+    #metadata h3 {
+      margin: 0 0 8px 0;
+      font-size: 14px;
+      color: #fff;
+    }
+
+    #metadata p {
+      margin: 6px 0;
+    }
+
+    #metadata ul {
+      padding-left: 0;
+      margin: 6px 0 0 0;
+    }
+
+    #metadata li {
+      list-style: none;
+      margin: 2px 0;
+    }
+
+    #metadata .note {
+      font-size: 11px;
+      color: #aaa;
+      margin-top: 8px;
+    }
   </style>
 </head>
 
@@ -50,8 +90,9 @@
 
 <div id="map"></div>
 
+<!-- Controls -->
 <div id="controls">
-  <div><strong>Min magnitude</strong></div>
+  <div><strong>Minimum magnitude</strong></div>
   <input
     id="magSlider"
     type="range"
@@ -60,13 +101,50 @@
     step="0.1"
     value="0"
   />
-  <div>Value: <span id="magValue">0</span></div>
+  <div>Value: <span id="magValue">0.0</span></div>
+</div>
+
+<!-- Metadata panel -->
+<div id="metadata">
+  <h3>3D Earthquake Intensity Map</h3>
+
+  <p>
+    Interactive 3D visualization of global seismic activity.
+    Vertical extrusion and color encode earthquake magnitude.
+  </p>
+
+  <p>
+    <strong>Data source:</strong><br>
+    USGS Earthquake Catalog
+  </p>
+
+  <p>
+    <strong>Temporal coverage:</strong><br>
+    Last 30 days (rolling window)
+  </p>
+
+  <p>
+    <strong>Visual encoding:</strong><br>
+    Height & color → Moment magnitude (Mw)
+  </p>
+
+  <p><strong>Magnitude classes:</strong></p>
+  <ul>
+    <li><span style="color:#dc3c3c;">■</span> Mw ≥ 6.0</li>
+    <li><span style="color:#f0a03c;">■</span> 4.0 ≤ Mw &lt; 6.0</li>
+    <li><span style="color:#f0dc8c;">■</span> Mw &lt; 4.0</li>
+  </ul>
+
+  <p class="note">
+    Heights are visually exaggerated for interpretability.
+    This visualization is intended for exploratory analysis only.
+  </p>
 </div>
 
 <script>
-  // ----------------------------------------------------------------------------
-  // 1. Create the MapLibre map
-  // ----------------------------------------------------------------------------
+  // ---------------------------------------------------------------------------
+  // 1. Create MapLibre map
+  // ---------------------------------------------------------------------------
   const map = new maplibregl.Map({
     container: 'map',
     style: 'https://basemaps.cartocdn.com/gl/dark-matter-gl-style/style.json',
@@ -79,15 +157,15 @@
 
   map.addControl(new maplibregl.NavigationControl());
 
-  // ----------------------------------------------------------------------------
+  // ---------------------------------------------------------------------------
   // 2. Globals
-  // ----------------------------------------------------------------------------
+  // ---------------------------------------------------------------------------
   let earthquakes = [];
   let overlay = null;
 
-  // ----------------------------------------------------------------------------
+  // ---------------------------------------------------------------------------
   // 3. Fetch USGS earthquake data
-  // ----------------------------------------------------------------------------
+  // ---------------------------------------------------------------------------
   fetch('https://earthquake.usgs.gov/earthquakes/feed/v1.0/summary/all_month.geojson')
     .then(response => response.json())
     .then(data => {
@@ -98,9 +176,9 @@
       console.error('Failed to load earthquake data', err);
     });
 
-  // ----------------------------------------------------------------------------
-  // 4. Build / update the deck.gl layer
-  // ----------------------------------------------------------------------------
+  // ---------------------------------------------------------------------------
+  // 4. Build / update deck.gl layer
+  // ---------------------------------------------------------------------------
   function updateLayer(minMag) {
     const filtered = earthquakes.filter(
       d => (d.properties.mag || 0) >= minMag
@@ -138,9 +216,9 @@
     }
   }
 
-  // ----------------------------------------------------------------------------
-  // 5. Slider wiring
-  // ----------------------------------------------------------------------------
+  // ---------------------------------------------------------------------------
+  // 5. Slider interaction
+  // ---------------------------------------------------------------------------
   const slider = document.getElementById('magSlider');
   const label = document.getElementById('magValue');
 
