@@ -86,13 +86,12 @@
   <h3>3D Earthquake & Tectonics Explorer</h3>
 
   <p>
-    Interactive 3D visualization of global earthquakes overlaid on
-    true terrain and tectonic plate boundaries.
+    Interactive 3D visualization of global earthquakes
+    overlaid with tectonic plate boundaries.
   </p>
 
   <p><strong>Earthquakes:</strong> USGS (last 30 days)</p>
-  <p><strong>Tectonics:</strong> Global plate boundaries (PB2002 / Bird)</p>
-  <p><strong>Terrain:</strong> Global DEM (MapLibre raster-DEM)</p>
+  <p><strong>Tectonics:</strong> PB2002 plate boundaries</p>
 
   <p><strong>Encoding:</strong><br>
     Columns → magnitude (Mw)<br>
@@ -100,8 +99,8 @@
   </p>
 
   <p class="note">
-    Terrain is shown for geophysical context only.
-    Earthquake heights are visually exaggerated.
+    Heights are visually exaggerated.
+    Flat map projection used intentionally.
   </p>
 </div>
 
@@ -113,11 +112,11 @@
 
 <script>
   // ---------------------------------------------------------------------------
-  // Map setup (Europe-focused, true terrain)
+  // Map setup (dark, clean, Europe-focused)
   // ---------------------------------------------------------------------------
   const map = new maplibregl.Map({
     container: 'map',
-    style: 'https://demotiles.maplibre.org/style.json',
+    style: 'https://basemaps.cartocdn.com/gl/dark-matter-gl-style/style.json',
     center: [12, 50],
     zoom: 3.8,
     pitch: 60,
@@ -128,24 +127,10 @@
 
   map.addControl(new maplibregl.NavigationControl());
 
+  // ---------------------------------------------------------------------------
+  // Plate boundaries (2D context)
+  // ---------------------------------------------------------------------------
   map.on('load', () => {
-    // --- Terrain (DEM)
-    map.addSource('terrain', {
-      type: 'raster-dem',
-      url: 'https://demotiles.maplibre.org/terrain-tiles/tiles.json',
-      tileSize: 256
-    });
-
-    map.setTerrain({
-      source: 'terrain',
-      exaggeration: 1.5
-    });
-    map.setFog({
-      color: '#0b0b0b',
-      'high-color': '#000',
-      'horizon-blend': 0.15
-    });
-    // --- Plate boundaries (GeoJSON, hosted remotely)
     map.addSource('plates', {
       type: 'geojson',
       data: 'https://raw.githubusercontent.com/fraxen/tectonicplates/master/GeoJSON/PB2002_boundaries.json'
@@ -264,7 +249,7 @@
 
     setTimeout(() => {
       const link = document.createElement('a');
-      link.download = 'earthquake_tectonics_3d.png';
+      link.download = 'earthquake_3d_dark.png';
       link.href = map.getCanvas().toDataURL('image/png');
       link.click();
 
