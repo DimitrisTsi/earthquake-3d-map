@@ -156,15 +156,16 @@
   // ---------------------------------------------------------------------------
   // Map setup
   // ---------------------------------------------------------------------------
-  const map = new maplibregl.Map({
-    container: 'map',
-    style: 'https://basemaps.cartocdn.com/gl/dark-matter-gl-style/style.json',
-    center: [0, 20],
-    zoom: 1.8,
-    pitch: 60,
-    bearing: -20,
-    antialias: true
-  });
+const map = new maplibregl.Map({
+  container: 'map',
+  style: 'https://basemaps.cartocdn.com/gl/dark-matter-gl-style/style.json',
+  center: [0, 20],
+  zoom: 1.8,
+  pitch: 60,
+  bearing: -20,
+  antialias: true,
+  preserveDrawingBuffer: true   // ← THIS is the key
+});
 
   map.addControl(new maplibregl.NavigationControl());
 
