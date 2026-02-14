@@ -1,4 +1,128 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>Earthquake 3D Showcase</title>
+
+<!-- Prevent favicon 404 -->
+<link rel="icon" href="data:,">
+
+<!-- MapLibre -->
+<link href="https://cdn.jsdelivr.net/npm/maplibre-gl@3.6.1/dist/maplibre-gl.css" rel="stylesheet" />
+<script src="https://cdn.jsdelivr.net/npm/maplibre-gl@3.6.1/dist/maplibre-gl.js"></script>
+
+<!-- deck.gl -->
+<script src="https://cdn.jsdelivr.net/npm/deck.gl@8.9.34/dist.min.js"></script>
+
+<style>
+body {
+  margin: 0;
+  overflow: hidden;
+  background: #000;
+  font-family: system-ui, sans-serif;
+}
+
+#map {
+  width: 100vw;
+  height: 100vh;
+}
+
+.panel {
+  position: absolute;
+  background: rgba(15,15,15,0.92);
+  color: #ddd;
+  padding: 12px;
+  border-radius: 6px;
+  font-size: 12px;
+  z-index: 10;
+}
+
+#controls { top: 20px; left: 20px; width: 260px; }
+#stats { top: 20px; right: 20px; width: 220px; }
+#metadata { bottom: 20px; left: 20px; width: 340px; }
+#infobox { bottom: 20px; right: 20px; width: 280px; }
+#legend { bottom: 20px; left: 50%; transform: translateX(-50%); width: 220px; }
+
+.legend-row {
+  display: flex;
+  align-items: center;
+  margin-bottom: 4px;
+}
+
+.color-box {
+  width: 14px;
+  height: 14px;
+  margin-right: 6px;
+  border-radius: 2px;
+}
+
+button, select {
+  width: 100%;
+  margin-top: 6px;
+  padding: 6px;
+  background: #222;
+  color: #fff;
+  border: 1px solid #444;
+  cursor: pointer;
+}
+
+button:hover { background: #333; }
+
+input { width: 100%; }
+</style>
+</head>
+
+<body>
+
+<div id="map"></div>
+
+<div id="controls" class="panel">
+<strong>Filters</strong><br><br>
+
+<label>Minimum magnitude</label>
+<input id="magSlider" type="range" min="0" max="8" step="0.1" value="0">
+<div>Value: <span id="magValue">0.0</span></div>
+
+<br>
+
+<label>Time window (days)</label>
+<input id="timeSlider" type="range" min="1" max="30" step="1" value="30">
+<div>Last <span id="timeValue">30</span> days</div>
+
+<br>
+
+<label>Color encoding</label>
+<select id="colorMode">
+  <option value="mag">Magnitude</option>
+  <option value="depth">Depth</option>
+</select>
+</div>
+
+<div id="stats" class="panel">
+<strong>Live Stats</strong>
+<div id="statsContent">Loading...</div>
+</div>
+
+<div id="metadata" class="panel">
+<h3>Earthquake 3D Showcase</h3>
+<p><strong>Date interval:</strong><br>
+<span id="dateInterval">Loading...</span></p>
+</div>
+
+<div id="infobox" class="panel">
+<strong>Earthquake details</strong>
+<div id="infoContent">Click a column</div>
+</div>
+
+<div id="legend" class="panel">
+<strong>Legend</strong>
+<div id="legendContent"></div>
+</div>
+
 <script>
+/* ===============================
+   INITIALIZE MAP
+=================================*/
 const map = new maplibregl.Map({
   container: 'map',
   style: 'https://basemaps.cartocdn.com/gl/dark-matter-gl-style/style.json',
@@ -11,10 +135,25 @@ const map = new maplibregl.Map({
 
 map.addControl(new maplibregl.NavigationControl());
 
+/* ===============================
+   DOM REFERENCES
+=================================*/
+const magSlider = document.getElementById("magSlider");
+const magValue = document.getElementById("magValue");
+const timeSlider = document.getElementById("timeSlider");
+const timeValue = document.getElementById("timeValue");
+const colorMode = document.getElementById("colorMode");
+
+const legendContent = document.getElementById("legendContent");
+const statsContent = document.getElementById("statsContent");
+const dateInterval = document.getElementById("dateInterval");
+const infoContent = document.getElementById("infoContent");
+
+/* ===============================
+   DATA
+=================================*/
 let earthquakes = [];
 let overlay = null;
-let playing = false;
-let playInterval = null;
 
 fetch('https://earthquake.usgs.gov/earthquakes/feed/v1.0/summary/all_month.geojson')
   .then(r => r.json())
@@ -23,6 +162,9 @@ fetch('https://earthquake.usgs.gov/earthquakes/feed/v1.0/summary/all_month.geojs
     updateLayer();
   });
 
+/* ===============================
+   LEGEND
+=================================*/
 function updateLegend(mode) {
   if (mode === "depth") {
     legendContent.innerHTML = `
@@ -39,7 +181,11 @@ function updateLegend(mode) {
   }
 }
 
+/* ===============================
+   UPDATE LAYER
+=================================*/
 function updateLayer() {
+
   const minMag = parseFloat(magSlider.value);
   const days = parseInt(timeSlider.value);
   const cutoff = Date.now() - days * 86400000;
@@ -86,7 +232,7 @@ function updateLayer() {
       }
     },
 
-    pickable: true,   // ← THIS WAS MISSING
+    pickable: true,
 
     onClick: ({object}) => {
       if (!object) return;
@@ -118,6 +264,9 @@ function updateLayer() {
   }
 }
 
+/* ===============================
+   STATS
+=================================*/
 function updateStats(data) {
   if (!data.length) {
     statsContent.innerHTML = "No events";
@@ -135,17 +284,23 @@ function updateStats(data) {
   `;
 }
 
-magSlider.oninput = () => {
+/* ===============================
+   UI EVENTS
+=================================*/
+magSlider.addEventListener("input", () => {
   magValue.textContent = parseFloat(magSlider.value).toFixed(1);
   updateLayer();
-};
+});
 
-timeSlider.oninput = () => {
+timeSlider.addEventListener("input", () => {
   timeValue.textContent = timeSlider.value;
   updateLayer();
-};
+});
 
-colorMode.onchange = updateLayer;
+colorMode.addEventListener("change", updateLayer);
 
 updateLegend("mag");
 </script>
+
+</body>
+</html>
