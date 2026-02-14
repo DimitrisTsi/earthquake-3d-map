@@ -1,257 +1,237 @@
 <!doctype html>
 <html lang="en">
 <head>
-  <meta charset="utf-8" />
-  <title>Earthquakes in the last 30 days</title>
+<meta charset="utf-8" />
+<title>Earthquakes in the last 30 days</title>
 
-  <!-- MapLibre GL -->
-  <script src="https://unpkg.com/maplibre-gl@3.6.1/dist/maplibre-gl.js"></script>
-  <link href="https://unpkg.com/maplibre-gl@3.6.1/dist/maplibre-gl.css" rel="stylesheet"/>
+<script src="https://unpkg.com/maplibre-gl@3.6.1/dist/maplibre-gl.js"></script>
+<link href="https://unpkg.com/maplibre-gl@3.6.1/dist/maplibre-gl.css" rel="stylesheet"/>
 
-  <!-- deck.gl -->
-  <script src="https://unpkg.com/deck.gl@8.9.34/dist.min.js"></script>
+<script src="https://unpkg.com/deck.gl@8.9.34/dist.min.js"></script>
 
-  <style>
-    body {
-      margin: 0;
-      overflow: hidden;
-      background: #000;
-      font-family: system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
-    }
+<style>
+body {
+  margin: 0;
+  overflow: hidden;
+  background: #000;
+  font-family: system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
+}
 
-    #map {
-      width: 100vw;
-      height: 100vh;
-    }
+#map {
+  width: 100vw;
+  height: 100vh;
+}
 
-    .panel {
-      position: absolute;
-      background: rgba(15,15,15,0.9);
-      color: #ddd;
-      padding: 12px;
-      border-radius: 4px;
-      font-size: 12px;
-      z-index: 10;
-    }
+.panel {
+  position: absolute;
+  background: rgba(15,15,15,0.9);
+  color: #ddd;
+  padding: 12px;
+  border-radius: 4px;
+  font-size: 12px;
+  z-index: 10;
+}
 
-    #controls { top: 20px; left: 20px; width: 260px; }
-    #metadata { bottom: 20px; left: 20px; width: 340px; line-height: 1.45; }
-    #infobox { bottom: 20px; right: 20px; width: 280px; }
+#controls { top: 20px; left: 20px; width: 260px; }
+#metadata { bottom: 20px; left: 20px; width: 340px; line-height: 1.45; }
+#infobox { bottom: 20px; right: 20px; width: 280px; }
 
-    input { width: 100%; }
+input { width: 100%; }
 
-    button {
-      margin-top: 8px;
-      width: 100%;
-      padding: 6px;
-      background: #222;
-      color: #fff;
-      border: 1px solid #444;
-      cursor: pointer;
-    }
+button {
+  margin-top: 8px;
+  width: 100%;
+  padding: 6px;
+  background: #222;
+  color: #fff;
+  border: 1px solid #444;
+  cursor: pointer;
+}
 
-    button:hover { background: #333; }
+button:hover { background: #333; }
 
-    h3 { margin: 0 0 6px 0; color: #fff; font-size: 14px; }
-    ul { padding-left: 0; margin: 6px 0; }
-    li { list-style: none; margin: 2px 0; }
-
-    .note { color: #aaa; font-size: 11px; margin-top: 6px; }
-  </style>
+h3 { margin: 0 0 6px 0; color: #fff; font-size: 14px; }
+.note { color: #aaa; font-size: 11px; margin-top: 6px; }
+</style>
 </head>
 
 <body>
 
 <div id="map"></div>
 
-<!-- Controls -->
 <div id="controls" class="panel">
-  <strong>Filters</strong><br><br>
+<strong>Filters</strong><br><br>
 
-  <label>Minimum magnitude</label>
-  <input id="magSlider" type="range" min="0" max="8" step="0.1" value="0">
-  <div>Value: <span id="magValue">0.0</span></div>
+<label>Minimum magnitude</label>
+<input id="magSlider" type="range" min="0" max="8" step="0.1" value="0">
+<div>Value: <span id="magValue">0.0</span></div>
 
-  <br>
+<br>
 
-  <label>Time window (days)</label>
-  <input id="timeSlider" type="range" min="1" max="30" step="1" value="30">
-  <div>Last <span id="timeValue">30</span> days</div>
+<label>Time window (days)</label>
+<input id="timeSlider" type="range" min="1" max="30" step="1" value="30">
+<div>Last <span id="timeValue">30</span> days</div>
 
-  <button id="exportBtn">Export screenshot</button>
+<button id="exportBtn">Export screenshot</button>
 </div>
 
-<!-- Metadata -->
 <div id="metadata" class="panel">
-  <h3>Earthquakes in the last 30 days</h3>
+<h3>Earthquakes</h3>
 
-  <p><strong>Earthquakes:</strong> USGS (last 30 days)</p>
-  <p><strong>Tectonics:</strong> PB2002 plate boundaries</p>
+<p><strong>Date interval:</strong><br>
+<span id="dateInterval">Loading...</span>
+</p>
 
-  <p><strong>Encoding:</strong><br>
-    Columns → magnitude (Mw)<br>
-    Lines → plate boundaries
-  </p>
+<p><strong>Earthquakes:</strong> USGS (last 30 days)</p>
+<p><strong>Tectonics:</strong> PB2002 plate boundaries</p>
 
-  <p class="note">
-    dimitristsi.github.io
-  </p>
+<p><strong>Encoding:</strong><br>
+Columns → magnitude (Mw)<br>
+Lines → plate boundaries
+</p>
+
+<p class="note">dimitristsi.github.io</p>
 </div>
 
-<!-- Info box -->
 <div id="infobox" class="panel">
-  <strong>Earthquake details</strong>
-  <div id="infoContent" class="note">Click a column</div>
+<strong>Earthquake details</strong>
+<div id="infoContent" class="note">Click a column</div>
 </div>
 
 <script>
-  // ---------------------------------------------------------------------------
-  // Map setup (dark, clean, Europe-focused)
-  // ---------------------------------------------------------------------------
-  const map = new maplibregl.Map({
-    container: 'map',
-    style: 'https://basemaps.cartocdn.com/gl/dark-matter-gl-style/style.json',
-    center: [12, 50],
-    zoom: 3.8,
-    pitch: 60,
-    bearing: -20,
-    antialias: true,
-    preserveDrawingBuffer: true
+const map = new maplibregl.Map({
+  container: 'map',
+  style: 'https://basemaps.cartocdn.com/gl/dark-matter-gl-style/style.json',
+  center: [12, 50],
+  zoom: 3.8,
+  pitch: 60,
+  bearing: -20,
+  antialias: true,
+  preserveDrawingBuffer: true
+});
+
+map.addControl(new maplibregl.NavigationControl());
+
+map.on('load', () => {
+  map.addSource('plates', {
+    type: 'geojson',
+    data: 'https://raw.githubusercontent.com/fraxen/tectonicplates/master/GeoJSON/PB2002_boundaries.json'
   });
 
-  map.addControl(new maplibregl.NavigationControl());
-
-  // ---------------------------------------------------------------------------
-  // Plate boundaries (2D context)
-  // ---------------------------------------------------------------------------
-  map.on('load', () => {
-    map.addSource('plates', {
-      type: 'geojson',
-      data: 'https://raw.githubusercontent.com/fraxen/tectonicplates/master/GeoJSON/PB2002_boundaries.json'
-    });
-
-    map.addLayer({
-      id: 'plates-line',
-      type: 'line',
-      source: 'plates',
-      paint: {
-        'line-color': '#00bcd4',
-        'line-width': 1.5,
-        'line-opacity': 0.6
-      }
-    });
-  });
-
-  // ---------------------------------------------------------------------------
-  // Globals
-  // ---------------------------------------------------------------------------
-  let earthquakes = [];
-  let overlay = null;
-
-  // ---------------------------------------------------------------------------
-  // Fetch earthquake data
-  // ---------------------------------------------------------------------------
-  fetch('https://earthquake.usgs.gov/earthquakes/feed/v1.0/summary/all_month.geojson')
-    .then(r => r.json())
-    .then(data => {
-      earthquakes = data.features;
-      updateLayer();
-    });
-
-  // ---------------------------------------------------------------------------
-  // Update deck.gl layer
-  // ---------------------------------------------------------------------------
-  function updateLayer() {
-    const minMag = parseFloat(document.getElementById('magSlider').value);
-    const days = parseInt(document.getElementById('timeSlider').value);
-    const cutoff = Date.now() - days * 24 * 3600 * 1000;
-
-    const filtered = earthquakes.filter(d =>
-      (d.properties.mag || 0) >= minMag &&
-      d.properties.time >= cutoff
-    );
-
-    const layer = new deck.ColumnLayer({
-      id: 'earthquakes',
-      data: filtered,
-
-      radius: 20000,
-      diskResolution: 12,
-      extruded: true,
-      elevationScale: 20000,
-
-      getPosition: d => d.geometry.coordinates,
-      getElevation: d => d.properties.mag || 0,
-
-      getFillColor: d => {
-        const m = d.properties.mag || 0;
-        if (m >= 6) return [220, 60, 60];
-        if (m >= 4) return [240, 160, 60];
-        return [240, 220, 140];
-      },
-
-      pickable: true,
-
-      onClick: ({object}) => {
-        if (!object) return;
-
-        const date = new Date(object.properties.time);
-        const depth = object.geometry.coordinates[2];
-
-        document.getElementById('infoContent').innerHTML = `
-          <p><strong>Magnitude:</strong> ${object.properties.mag}</p>
-          <p><strong>Date:</strong><br>${date.toUTCString()}</p>
-          <p><strong>Depth:</strong> ${depth} km</p>
-          <p><strong>Location:</strong><br>${object.properties.place}</p>
-        `;
-      }
-    });
-
-    if (!overlay) {
-      overlay = new deck.MapboxOverlay({ layers: [layer] });
-      map.addControl(overlay);
-    } else {
-      overlay.setProps({ layers: [layer] });
+  map.addLayer({
+    id: 'plates-line',
+    type: 'line',
+    source: 'plates',
+    paint: {
+      'line-color': '#00bcd4',
+      'line-width': 1.5,
+      'line-opacity': 0.6
     }
+  });
+});
+
+let earthquakes = [];
+let overlay = null;
+
+fetch('https://earthquake.usgs.gov/earthquakes/feed/v1.0/summary/all_month.geojson')
+  .then(r => r.json())
+  .then(data => {
+    earthquakes = data.features;
+    updateLayer();
+  });
+
+function updateLayer() {
+  const minMag = parseFloat(document.getElementById('magSlider').value);
+  const days = parseInt(document.getElementById('timeSlider').value);
+  const cutoff = Date.now() - days * 24 * 3600 * 1000;
+
+  const now = new Date();
+  const startDate = new Date(cutoff);
+  const format = d => d.toISOString().split('T')[0];
+
+  document.getElementById('dateInterval').textContent =
+    `${format(startDate)} → ${format(now)}`;
+
+  const filtered = earthquakes.filter(d =>
+    (d.properties.mag || 0) >= minMag &&
+    d.properties.time >= cutoff
+  );
+
+  const layer = new deck.ColumnLayer({
+    id: 'earthquakes',
+    data: filtered,
+
+    radius: 10000,            // HALF SIZE
+    diskResolution: 12,
+    extruded: true,
+    elevationScale: 10000,    // HALF HEIGHT
+
+    getPosition: d => d.geometry.coordinates,
+    getElevation: d => d.properties.mag || 0,
+
+    getFillColor: d => {
+      const m = d.properties.mag || 0;
+      if (m >= 6) return [220, 60, 60];
+      if (m >= 4) return [240, 160, 60];
+      return [240, 220, 140];
+    },
+
+    pickable: true,
+
+    onClick: ({object}) => {
+      if (!object) return;
+
+      const date = new Date(object.properties.time);
+      const depth = object.geometry.coordinates[2];
+
+      document.getElementById('infoContent').innerHTML = `
+        <p><strong>Magnitude:</strong> ${object.properties.mag}</p>
+        <p><strong>Date:</strong><br>${date.toUTCString()}</p>
+        <p><strong>Depth:</strong> ${depth} km</p>
+        <p><strong>Location:</strong><br>${object.properties.place}</p>
+      `;
+    }
+  });
+
+  if (!overlay) {
+    overlay = new deck.MapboxOverlay({ layers: [layer] });
+    map.addControl(overlay);
+  } else {
+    overlay.setProps({ layers: [layer] });
   }
+}
 
-  // ---------------------------------------------------------------------------
-  // UI wiring
-  // ---------------------------------------------------------------------------
-  const magSlider = document.getElementById('magSlider');
-  const magValue = document.getElementById('magValue');
-  const timeSlider = document.getElementById('timeSlider');
-  const timeValue = document.getElementById('timeValue');
+const magSlider = document.getElementById('magSlider');
+const magValue = document.getElementById('magValue');
+const timeSlider = document.getElementById('timeSlider');
+const timeValue = document.getElementById('timeValue');
 
-  magSlider.addEventListener('input', () => {
-    magValue.textContent = parseFloat(magSlider.value).toFixed(1);
-    updateLayer();
-  });
+magSlider.addEventListener('input', () => {
+  magValue.textContent = parseFloat(magSlider.value).toFixed(1);
+  updateLayer();
+});
 
-  timeSlider.addEventListener('input', () => {
-    timeValue.textContent = timeSlider.value;
-    updateLayer();
-  });
+timeSlider.addEventListener('input', () => {
+  timeValue.textContent = timeSlider.value;
+  updateLayer();
+});
 
-  // ---------------------------------------------------------------------------
-  // Screenshot export
-  // ---------------------------------------------------------------------------
-  document.getElementById('exportBtn').addEventListener('click', () => {
+document.getElementById('exportBtn').addEventListener('click', () => {
+  ['controls','metadata','infobox'].forEach(id =>
+    document.getElementById(id).style.display = 'none'
+  );
+
+  setTimeout(() => {
+    const link = document.createElement('a');
+    link.download = 'earthquake_3d_dark.png';
+    link.href = map.getCanvas().toDataURL('image/png');
+    link.click();
+
     ['controls','metadata','infobox'].forEach(id =>
-      document.getElementById(id).style.display = 'none'
+      document.getElementById(id).style.display = ''
     );
-
-    setTimeout(() => {
-      const link = document.createElement('a');
-      link.download = 'earthquake_3d_dark.png';
-      link.href = map.getCanvas().toDataURL('image/png');
-      link.click();
-
-      ['controls','metadata','infobox'].forEach(id =>
-        document.getElementById(id).style.display = ''
-      );
-    }, 300);
-  });
+  }, 300);
+});
 </script>
 
 </body>
