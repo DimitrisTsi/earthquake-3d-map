@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="utf-8" />
-<title>Earthquakes in the last 30 days</title>
+<title>Earthquake 3D Showcase</title>
 
 <script src="https://unpkg.com/maplibre-gl@3.6.1/dist/maplibre-gl.js"></script>
 <link href="https://unpkg.com/maplibre-gl@3.6.1/dist/maplibre-gl.css" rel="stylesheet"/>
@@ -14,7 +14,7 @@ body {
   margin: 0;
   overflow: hidden;
   background: #000;
-  font-family: system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
+  font-family: system-ui, sans-serif;
 }
 
 #map {
@@ -24,23 +24,22 @@ body {
 
 .panel {
   position: absolute;
-  background: rgba(15,15,15,0.9);
+  background: rgba(15,15,15,0.92);
   color: #ddd;
   padding: 12px;
-  border-radius: 4px;
+  border-radius: 6px;
   font-size: 12px;
   z-index: 10;
 }
 
 #controls { top: 20px; left: 20px; width: 260px; }
-#metadata { bottom: 20px; left: 20px; width: 340px; line-height: 1.45; }
+#stats { top: 20px; right: 20px; width: 220px; }
+#metadata { bottom: 20px; left: 20px; width: 340px; }
 #infobox { bottom: 20px; right: 20px; width: 280px; }
 
-input { width: 100%; }
-
-button {
-  margin-top: 8px;
+button, select {
   width: 100%;
+  margin-top: 6px;
   padding: 6px;
   background: #222;
   color: #fff;
@@ -50,8 +49,7 @@ button {
 
 button:hover { background: #333; }
 
-h3 { margin: 0 0 6px 0; color: #fff; font-size: 14px; }
-.note { color: #aaa; font-size: 11px; margin-top: 6px; }
+input { width: 100%; }
 </style>
 </head>
 
@@ -72,30 +70,32 @@ h3 { margin: 0 0 6px 0; color: #fff; font-size: 14px; }
 <input id="timeSlider" type="range" min="1" max="30" step="1" value="30">
 <div>Last <span id="timeValue">30</span> days</div>
 
-<button id="exportBtn">Export screenshot</button>
+<button id="playBtn">▶ Play Time</button>
+
+<br>
+
+<label>Color encoding</label>
+<select id="colorMode">
+  <option value="mag">Magnitude</option>
+  <option value="depth">Depth</option>
+</select>
+</div>
+
+<div id="stats" class="panel">
+<strong>Live Stats</strong>
+<div id="statsContent">Loading...</div>
 </div>
 
 <div id="metadata" class="panel">
-<h3>Earthquakes</h3>
-
+<h3>Earthquake 3D Showcase</h3>
 <p><strong>Date interval:</strong><br>
-<span id="dateInterval">Loading...</span>
-</p>
-
-<p><strong>Earthquakes:</strong> USGS (last 30 days)</p>
-<p><strong>Tectonics:</strong> PB2002 plate boundaries</p>
-
-<p><strong>Encoding:</strong><br>
-Columns → magnitude (Mw)<br>
-Lines → plate boundaries
-</p>
-
-<p class="note">dimitristsi.github.io</p>
+<span id="dateInterval">Loading...</span></p>
+<p>USGS 30-day feed · PB2002 tectonic plates</p>
 </div>
 
 <div id="infobox" class="panel">
 <strong>Earthquake details</strong>
-<div id="infoContent" class="note">Click a column</div>
+<div id="infoContent">Click a column</div>
 </div>
 
 <script>
@@ -132,6 +132,8 @@ map.on('load', () => {
 
 let earthquakes = [];
 let overlay = null;
+let playing = false;
+let playInterval = null;
 
 fetch('https://earthquake.usgs.gov/earthquakes/feed/v1.0/summary/all_month.geojson')
   .then(r => r.json())
@@ -141,39 +143,48 @@ fetch('https://earthquake.usgs.gov/earthquakes/feed/v1.0/summary/all_month.geojs
   });
 
 function updateLayer() {
-  const minMag = parseFloat(document.getElementById('magSlider').value);
-  const days = parseInt(document.getElementById('timeSlider').value);
-  const cutoff = Date.now() - days * 24 * 3600 * 1000;
+  const minMag = parseFloat(magSlider.value);
+  const days = parseInt(timeSlider.value);
+  const cutoff = Date.now() - days * 86400000;
 
   const now = new Date();
   const startDate = new Date(cutoff);
   const format = d => d.toISOString().split('T')[0];
-
-  document.getElementById('dateInterval').textContent =
-    `${format(startDate)} → ${format(now)}`;
+  dateInterval.textContent = `${format(startDate)} → ${format(now)}`;
 
   const filtered = earthquakes.filter(d =>
     (d.properties.mag || 0) >= minMag &&
     d.properties.time >= cutoff
   );
 
+  updateStats(filtered);
+
+  const colorMode = document.getElementById("colorMode").value;
+
   const layer = new deck.ColumnLayer({
     id: 'earthquakes',
     data: filtered,
-
-    radius: 10000,            // HALF SIZE
+    radius: 10000,
     diskResolution: 12,
     extruded: true,
-    elevationScale: 10000,    // HALF HEIGHT
+    elevationScale: 8000,
 
     getPosition: d => d.geometry.coordinates,
     getElevation: d => d.properties.mag || 0,
 
     getFillColor: d => {
-      const m = d.properties.mag || 0;
-      if (m >= 6) return [220, 60, 60];
-      if (m >= 4) return [240, 160, 60];
-      return [240, 220, 140];
+      const mag = d.properties.mag || 0;
+      const depth = d.geometry.coordinates[2] || 0;
+
+      if (colorMode === "depth") {
+        if (depth > 300) return [120, 0, 180];
+        if (depth > 100) return [0, 120, 220];
+        return [240, 220, 140];
+      } else {
+        if (mag >= 6) return [220, 60, 60];
+        if (mag >= 4) return [240, 160, 60];
+        return [240, 220, 140];
+      }
     },
 
     pickable: true,
@@ -181,13 +192,20 @@ function updateLayer() {
     onClick: ({object}) => {
       if (!object) return;
 
+      const coords = object.geometry.coordinates;
       const date = new Date(object.properties.time);
-      const depth = object.geometry.coordinates[2];
 
-      document.getElementById('infoContent').innerHTML = `
+      map.flyTo({
+        center: coords,
+        zoom: 6,
+        pitch: 70,
+        speed: 0.8
+      });
+
+      infoContent.innerHTML = `
         <p><strong>Magnitude:</strong> ${object.properties.mag}</p>
+        <p><strong>Depth:</strong> ${coords[2]} km</p>
         <p><strong>Date:</strong><br>${date.toUTCString()}</p>
-        <p><strong>Depth:</strong> ${depth} km</p>
         <p><strong>Location:</strong><br>${object.properties.place}</p>
       `;
     }
@@ -201,37 +219,52 @@ function updateLayer() {
   }
 }
 
-const magSlider = document.getElementById('magSlider');
-const magValue = document.getElementById('magValue');
-const timeSlider = document.getElementById('timeSlider');
-const timeValue = document.getElementById('timeValue');
+function updateStats(data) {
+  if (!data.length) {
+    statsContent.innerHTML = "No events";
+    return;
+  }
 
-magSlider.addEventListener('input', () => {
+  const mags = data.map(d => d.properties.mag || 0);
+  const maxMag = Math.max(...mags);
+  const avgMag = (mags.reduce((a,b)=>a+b,0)/mags.length).toFixed(2);
+
+  statsContent.innerHTML = `
+    Total: ${data.length}<br>
+    Max Mw: ${maxMag}<br>
+    Avg Mw: ${avgMag}
+  `;
+}
+
+magSlider.oninput = () => {
   magValue.textContent = parseFloat(magSlider.value).toFixed(1);
   updateLayer();
-});
+};
 
-timeSlider.addEventListener('input', () => {
+timeSlider.oninput = () => {
   timeValue.textContent = timeSlider.value;
   updateLayer();
-});
+};
 
-document.getElementById('exportBtn').addEventListener('click', () => {
-  ['controls','metadata','infobox'].forEach(id =>
-    document.getElementById(id).style.display = 'none'
-  );
+colorMode.onchange = updateLayer;
 
-  setTimeout(() => {
-    const link = document.createElement('a');
-    link.download = 'earthquake_3d_dark.png';
-    link.href = map.getCanvas().toDataURL('image/png');
-    link.click();
-
-    ['controls','metadata','infobox'].forEach(id =>
-      document.getElementById(id).style.display = ''
-    );
-  }, 300);
-});
+playBtn.onclick = () => {
+  if (!playing) {
+    playing = true;
+    playBtn.textContent = "⏸ Pause";
+    playInterval = setInterval(() => {
+      if (timeSlider.value > 1) {
+        timeSlider.value--;
+        timeValue.textContent = timeSlider.value;
+        updateLayer();
+      }
+    }, 600);
+  } else {
+    playing = false;
+    playBtn.textContent = "▶ Play Time";
+    clearInterval(playInterval);
+  }
+};
 </script>
 
 </body>
