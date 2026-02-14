@@ -36,6 +36,20 @@ body {
 #stats { top: 20px; right: 20px; width: 220px; }
 #metadata { bottom: 20px; left: 20px; width: 340px; }
 #infobox { bottom: 20px; right: 20px; width: 280px; }
+#legend { bottom: 20px; left: 50%; transform: translateX(-50%); width: 220px; }
+
+.legend-row {
+  display: flex;
+  align-items: center;
+  margin-bottom: 4px;
+}
+
+.color-box {
+  width: 14px;
+  height: 14px;
+  margin-right: 6px;
+  border-radius: 2px;
+}
 
 button, select {
   width: 100%;
@@ -90,12 +104,16 @@ input { width: 100%; }
 <h3>Earthquake 3D Showcase</h3>
 <p><strong>Date interval:</strong><br>
 <span id="dateInterval">Loading...</span></p>
-<p>USGS 30-day feed · PB2002 tectonic plates</p>
 </div>
 
 <div id="infobox" class="panel">
 <strong>Earthquake details</strong>
 <div id="infoContent">Click a column</div>
+</div>
+
+<div id="legend" class="panel">
+<strong>Legend</strong>
+<div id="legendContent"></div>
 </div>
 
 <script>
@@ -106,29 +124,10 @@ const map = new maplibregl.Map({
   zoom: 3.8,
   pitch: 60,
   bearing: -20,
-  antialias: true,
-  preserveDrawingBuffer: true
+  antialias: true
 });
 
 map.addControl(new maplibregl.NavigationControl());
-
-map.on('load', () => {
-  map.addSource('plates', {
-    type: 'geojson',
-    data: 'https://raw.githubusercontent.com/fraxen/tectonicplates/master/GeoJSON/PB2002_boundaries.json'
-  });
-
-  map.addLayer({
-    id: 'plates-line',
-    type: 'line',
-    source: 'plates',
-    paint: {
-      'line-color': '#00bcd4',
-      'line-width': 1.5,
-      'line-opacity': 0.6
-    }
-  });
-});
 
 let earthquakes = [];
 let overlay = null;
@@ -141,6 +140,22 @@ fetch('https://earthquake.usgs.gov/earthquakes/feed/v1.0/summary/all_month.geojs
     earthquakes = data.features;
     updateLayer();
   });
+
+function updateLegend(mode) {
+  if (mode === "depth") {
+    legendContent.innerHTML = `
+      <div class="legend-row"><div class="color-box" style="background:rgb(240,220,140)"></div>Shallow (&lt;100 km)</div>
+      <div class="legend-row"><div class="color-box" style="background:rgb(0,120,220)"></div>Intermediate (100–300 km)</div>
+      <div class="legend-row"><div class="color-box" style="background:rgb(120,0,180)"></div>Deep (&gt;300 km)</div>
+    `;
+  } else {
+    legendContent.innerHTML = `
+      <div class="legend-row"><div class="color-box" style="background:rgb(240,220,140)"></div>Mw &lt; 4</div>
+      <div class="legend-row"><div class="color-box" style="background:rgb(240,160,60)"></div>Mw 4–6</div>
+      <div class="legend-row"><div class="color-box" style="background:rgb(220,60,60)"></div>Mw ≥ 6</div>
+    `;
+  }
+}
 
 function updateLayer() {
   const minMag = parseFloat(magSlider.value);
@@ -159,13 +174,13 @@ function updateLayer() {
 
   updateStats(filtered);
 
-  const colorMode = document.getElementById("colorMode").value;
+  const mode = colorMode.value;
+  updateLegend(mode);
 
   const layer = new deck.ColumnLayer({
     id: 'earthquakes',
     data: filtered,
     radius: 10000,
-    diskResolution: 12,
     extruded: true,
     elevationScale: 8000,
 
@@ -176,38 +191,15 @@ function updateLayer() {
       const mag = d.properties.mag || 0;
       const depth = d.geometry.coordinates[2] || 0;
 
-      if (colorMode === "depth") {
-        if (depth > 300) return [120, 0, 180];
-        if (depth > 100) return [0, 120, 220];
-        return [240, 220, 140];
+      if (mode === "depth") {
+        if (depth > 300) return [120,0,180];
+        if (depth > 100) return [0,120,220];
+        return [240,220,140];
       } else {
-        if (mag >= 6) return [220, 60, 60];
-        if (mag >= 4) return [240, 160, 60];
-        return [240, 220, 140];
+        if (mag >= 6) return [220,60,60];
+        if (mag >= 4) return [240,160,60];
+        return [240,220,140];
       }
-    },
-
-    pickable: true,
-
-    onClick: ({object}) => {
-      if (!object) return;
-
-      const coords = object.geometry.coordinates;
-      const date = new Date(object.properties.time);
-
-      map.flyTo({
-        center: coords,
-        zoom: 6,
-        pitch: 70,
-        speed: 0.8
-      });
-
-      infoContent.innerHTML = `
-        <p><strong>Magnitude:</strong> ${object.properties.mag}</p>
-        <p><strong>Depth:</strong> ${coords[2]} km</p>
-        <p><strong>Date:</strong><br>${date.toUTCString()}</p>
-        <p><strong>Location:</strong><br>${object.properties.place}</p>
-      `;
     }
   });
 
@@ -248,23 +240,7 @@ timeSlider.oninput = () => {
 
 colorMode.onchange = updateLayer;
 
-playBtn.onclick = () => {
-  if (!playing) {
-    playing = true;
-    playBtn.textContent = "⏸ Pause";
-    playInterval = setInterval(() => {
-      if (timeSlider.value > 1) {
-        timeSlider.value--;
-        timeValue.textContent = timeSlider.value;
-        updateLayer();
-      }
-    }, 600);
-  } else {
-    playing = false;
-    playBtn.textContent = "▶ Play Time";
-    clearInterval(playInterval);
-  }
-};
+updateLegend("mag");
 </script>
 
 </body>
