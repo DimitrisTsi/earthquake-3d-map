@@ -136,6 +136,27 @@ const map = new maplibregl.Map({
 map.addControl(new maplibregl.NavigationControl());
 
 /* ===============================
+   TECTONIC PLATES
+=================================*/
+map.on('load', () => {
+  map.addSource('plates', {
+    type: 'geojson',
+    data: 'https://raw.githubusercontent.com/fraxen/tectonicplates/master/GeoJSON/PB2002_boundaries.json'
+  });
+
+  map.addLayer({
+    id: 'plates-line',
+    type: 'line',
+    source: 'plates',
+    paint: {
+      'line-color': '#00bcd4',
+      'line-width': 2,
+      'line-opacity': 0.8
+    }
+  });
+});
+
+/* ===============================
    DOM REFERENCES
 =================================*/
 const magSlider = document.getElementById("magSlider");
@@ -150,7 +171,7 @@ const dateInterval = document.getElementById("dateInterval");
 const infoContent = document.getElementById("infoContent");
 
 /* ===============================
-   DATA
+   DATA + OVERLAY
 =================================*/
 let earthquakes = [];
 let overlay = null;
@@ -208,7 +229,6 @@ function updateLayer() {
   const layer = new deck.ColumnLayer({
     id: 'earthquakes',
     data: filtered,
-
     radius: 10000,
     extruded: true,
     elevationScale: 8000,
